@@ -1,21 +1,24 @@
 {
   "name": "docflow-backend",
-  "version": "3.0.0",
+  "version": "1.0.0",
+  "description": "Chmurowy system zarządzania obiegiem dokumentów DocFlow",
   "private": true,
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=16.0.0"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.0",
-    "multer": "^1.4.5-lts.1"
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^7.0.0",
+    "multer": "^1.4.5-lts.1",
+    "dotenv": "^16.0.3"
   }
 }

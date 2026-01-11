@@ -2,142 +2,275 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
-  <title>DocFlow</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocFlow - System Zarządzania Dokumentami</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    :root {
+      --primary-color: #2c3e50;
+      --secondary-color: #3498db;
+      --success-color: #27ae60;
+      --danger-color: #e74c3c;
+      --warning-color: #f39c12;
+      --light-bg: #ecf0f1;
+    }
+
+    body {
+      background-color: var(--light-bg);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .navbar {
+      background-color: var(--primary-color) !important;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .navbar-brand {
+      font-weight: bold;
+      font-size: 1.5rem;
+    }
+
+    .container-main {
+      margin-top: 30px;
+      max-width: 1200px;
+    }
+
+    .card {
+      border: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+
+    .card-header {
+      background-color: var(--secondary-color) !important;
+      color: white;
+      border: none;
+    }
+
+    .btn-primary {
+      background-color: var(--secondary-color);
+      border-color: var(--secondary-color);
+    }
+
+    .btn-primary:hover {
+      background-color: #2980b9;
+      border-color: #2980b9;
+    }
+
+    .badge-category {
+      background-color: var(--warning-color);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 3px;
+      font-size: 0.85rem;
+    }
+
+    .badge-status {
+      padding: 5px 10px;
+      border-radius: 3px;
+      font-size: 0.85rem;
+    }
+
+    .badge-status.draft {
+      background-color: var(--warning-color);
+      color: white;
+    }
+
+    .badge-status.review {
+      background-color: var(--secondary-color);
+      color: white;
+    }
+
+    .badge-status.approved {
+      background-color: var(--success-color);
+      color: white;
+    }
+
+    .alert-message {
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .document-item {
+      border-left: 4px solid var(--secondary-color);
+      padding: 15px;
+      margin-bottom: 10px;
+      background-color: white;
+      border-radius: 3px;
+    }
+
+    .user-bar {
+      display: none;
+      float: right;
+      font-size: 0.9rem;
+    }
+
+    .user-bar span {
+      color: white;
+      margin-right: 15px;
+    }
+
+    .user-bar button {
+      background-color: var(--danger-color);
+      color: white;
+      border: none;
+      padding: 5px 15px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .dashboard-tile {
+      background-color: white;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .dashboard-tile:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+
+    .dashboard-tile h3 {
+      color: var(--primary-color);
+      margin-bottom: 10px;
+    }
+
+    .dashboard-tile .icon {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+    }
+  </style>
 </head>
-
-<body class="bg-light">
-
-<!-- ===== TOP BAR ===== -->
-<nav class="navbar navbar-dark bg-dark px-4">
-  <span class="navbar-brand">
-    <strong>DocFlow</strong> – system obiegu dokumentów
-  </span>
-  <span class="text-white" id="userBar" style="display:none;">
-    Zalogowany: <strong id="user"></strong>
-    <button class="btn btn-sm btn-outline-light ms-3" onclick="logout()">Wyloguj</button>
-  </span>
-</nav>
-
-<div class="container mt-4">
-
-<!-- ===== LOGOWANIE ===== -->
-<div id="auth" class="col-md-4 mx-auto">
-  <h4>Logowanie / Rejestracja</h4>
-  <input id="email" type="email" class="form-control mb-2" placeholder="Email" required>
-  <input id="password" type="password" class="form-control mb-2" placeholder="Hasło">
-  <button onclick="register()" class="btn btn-secondary w-100 mb-2">Zarejestruj</button>
-  <button onclick="login()" class="btn btn-primary w-100">Zaloguj</button>
-  <div id="msg" class="mt-2 text-danger"></div>
-</div>
-
-<!-- ===== APLIKACJA ===== -->
-<div id="app" style="display:none;">
-
-<!-- ===== DASHBOARD ===== -->
-<div id="dashboard" class="row g-4">
-
-  <div class="col-md-4">
-    <div class="card h-100">
-      <div class="card-body">
-        <h5>Kategoryzacja dokumentów</h5>
-        <p class="text-muted small">Definiowanie kategorii i słów kluczowych.</p>
-        <button class="btn btn-warning btn-sm" onclick="showSection('categoriesSection')">
-          Przejdź
-        </button>
+<body>
+  <!-- NAVBAR -->
+  <nav class="navbar navbar-dark">
+    <div class="container-fluid">
+      <span class="navbar-brand">📄 DocFlow</span>
+      <div id="userBar" class="user-bar">
+        <span>Zalogowany jako: <strong id="user">-</strong></span>
+        <button onclick="logout()">Wyloguj</button>
       </div>
     </div>
-  </div>
+  </nav>
 
-  <div class="col-md-4">
-    <div class="card h-100">
-      <div class="card-body">
-        <h5>Zarządzanie dokumentami</h5>
-        <p class="text-muted small">Dodawanie, klasyfikacja i workflow.</p>
-        <button class="btn btn-success btn-sm" onclick="showSection('documentsSection')">
-          Przejdź
-        </button>
-      </div>
-    </div>
-  </div>
+  <!-- GŁÓWNY KONTENER -->
+  <div class="container-main">
+    <!-- SEKCJA AUTORYZACJI -->
+    <div id="auth" class="row">
+      <div class="col-md-6 offset-md-3">
+        <div class="card mt-5">
+          <div class="card-header">
+            <h4>🔐 Logowanie / Rejestracja</h4>
+          </div>
+          <div class="card-body">
+            <div id="msg" class="alert-message"></div>
 
-  <div class="col-md-4" id="usersTile" style="display:none;">
-    <div class="card h-100 border-danger">
-      <div class="card-body">
-        <h5>Zarządzanie użytkownikami</h5>
-        <p class="text-muted small">Panel administracyjny.</p>
-        <button class="btn btn-danger btn-sm" onclick="showSection('usersSection')">
-          Przejdź
-        </button>
-      </div>
-    </div>
-  </div>
+            <div class="mb-3">
+              <label class="form-label">Email</label>
+              <input type="email" id="email" class="form-control" placeholder="twój@email.com">
+            </div>
 
-</div>
+            <div class="mb-3">
+              <label class="form-label">Hasło</label>
+              <input type="password" id="password" class="form-control" placeholder="Minimum 6 znaków">
+            </div>
 
-<!-- ===== KATEGORIE ===== -->
-<div id="categoriesSection" style="display:none;" class="mt-4">
-  <h4>Kategorie dokumentów</h4>
-
-  <div class="row g-2 mb-3">
-    <div class="col-md-3">
-      <input id="catName" class="form-control form-control-sm" placeholder="Nazwa kategorii">
-    </div>
-    <div class="col-md-6">
-      <input id="keywords" class="form-control form-control-sm" placeholder="Słowa kluczowe (oddzielone przecinkami)">
-    </div>
-    <div class="col-md-3 d-flex justify-content-end">
-      <button onclick="saveCategory()" class="btn btn-warning btn-sm">
-        Zapisz kategorię
-      </button>
-    </div>
-  </div>
-
-  <div id="categories" class="list-group"></div>
-
-  <button class="btn btn-outline-secondary btn-sm mt-3" onclick="backToDashboard()">Powrót</button>
-</div>
-
-<!-- ===== DOKUMENTY ===== -->
-<div id="documentsSection" style="display:none;" class="mt-4">
-  <h4>Dokumenty</h4>
-
-  <!-- DODAWANIE DOKUMENTU -->
-  <div class="card mb-3">
-    <div class="card-body">
-      <h6 class="card-title">Dodaj nowy dokument</h6>
-
-      <div class="row align-items-center">
-        <div class="col-md-8">
-          <input type="file" id="file" class="form-control form-control-sm">
-        </div>
-        <div class="col-md-4 text-end">
-          <button onclick="upload()" class="btn btn-success btn-sm">
-            WYŚLIJ
-          </button>
-          <button onclick="reclassifyDocuments()" class="btn btn-outline-secondary btn-sm">
-            ODŚWIEŻ KLASYFIKACJĘ
-          </button>
+            <button class="btn btn-primary w-100 mb-2" onclick="login()">Zaloguj</button>
+            <button class="btn btn-secondary w-100" onclick="register()">Utwórz konto</button>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- SEKCJA APLIKACJI -->
+    <div id="app" style="display: none;">
+      <!-- DASHBOARD -->
+      <div id="dashboard" class="dashboard">
+        <div id="documentsTile" class="dashboard-tile" onclick="showSection('documentsSection')">
+          <div class="icon">📑</div>
+          <h3>Dokumenty</h3>
+          <p>Zarządzaj swoimi dokumentami</p>
+        </div>
+
+        <div class="dashboard-tile" onclick="showSection('categoriesSection')">
+          <div class="icon">🏷️</div>
+          <h3>Kategorie</h3>
+          <p>Konfiguruj kategorie dokumentów</p>
+        </div>
+
+        <div id="usersTile" class="dashboard-tile" onclick="showSection('usersSection')" style="display: none;">
+          <div class="icon">👥</div>
+          <h3>Użytkownicy</h3>
+          <p>Zarządzaj użytkownikami systemu</p>
+        </div>
+      </div>
+
+      <!-- SEKCJA DOKUMENTÓW -->
+      <div id="documentsSection" style="display: none;">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 style="margin: 0;">📁 Moje Dokumenty</h5>
+            <button class="btn btn-sm btn-light" onclick="backToDashboard()">← Powrót</button>
+          </div>
+          <div class="card-body">
+            <h6>Dodaj dokument</h6>
+            <div class="input-group mb-3">
+              <input type="file" id="fileInput" class="form-control">
+              <button class="btn btn-success" onclick="uploadDocument()">Prześlij</button>
+            </div>
+
+            <h6 class="mt-4">Lista dokumentów</h6>
+            <div id="docs"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEKCJA KATEGORII -->
+      <div id="categoriesSection" style="display: none;">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 style="margin: 0;">🏷️ Kategorie Dokumentów</h5>
+            <button class="btn btn-sm btn-light" onclick="backToDashboard()">← Powrót</button>
+          </div>
+          <div class="card-body">
+            <h6>Dodaj kategorię</h6>
+            <div class="mb-3">
+              <input type="text" id="catName" class="form-control" placeholder="Nazwa kategorii" style="margin-bottom: 10px;">
+              <input type="text" id="keywords" class="form-control" placeholder="Słowa kluczowe (oddzielone przecinkami)" style="margin-bottom: 10px;">
+              <button class="btn btn-success" onclick="saveCategory()">Dodaj kategorię</button>
+            </div>
+
+            <h6 class="mt-4">Istniejące kategorie</h6>
+            <div id="categories"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEKCJA UŻYTKOWNIKÓW -->
+      <div id="usersSection" style="display: none;">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 style="margin: 0;">👥 Zarządzanie Użytkownikami</h5>
+            <button class="btn btn-sm btn-light" onclick="backToDashboard()">← Powrót</button>
+          </div>
+          <div class="card-body">
+            <div id="usersList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- LISTA DOKUMENTÓW -->
-  <ul id="docs" class="list-group"></ul>
-
-  <button class="btn btn-outline-secondary btn-sm mt-3" onclick="backToDashboard()">Powrót</button>
-</div>
-
-<!-- ===== UŻYTKOWNICY (ADMIN) ===== -->
-<div id="usersSection" style="display:none;" class="mt-4">
-  <h4>Zarządzanie użytkownikami</h4>
-
-  <div id="usersList" class="list-group"></div>
-
-  <button class="btn btn-outline-secondary btn-sm mt-3" onclick="backToDashboard()">Powrót</button>
-</div>
-
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
