@@ -1,116 +1,94 @@
+/* ===== KATEGORIE - POPRAWIONE ===== */
+
 const express = require('express');
 const Category = require('../models/Category');
 const router = express.Router();
 
-/* ====================================================== TWORZENIE NOWEJ KATEGORII ====================================================== */
-router.post('/', async (req, res) => {
-  try {
-    const { name, keywords, description } = req.body;
+// Middleware autoryzacji
+const auth = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).send('Brak tokena');
+  next();
+};
 
-    if (!name) {
-      return res.status(400).json({ error: 'Nazwa kategorii jest wymagana' });
+// CREATE - DODAJ KATEGORIĘ
+router.post('/', auth, async (req, res) => {
+  try {
+    const { name, keywords } = req.body;
+
+    if (!name || !keywords || keywords.length === 0) {
+      return res.status(400).json({ error: 'Nazwa i słowa kluczowe są wymagane' });
     }
 
-    // Sprawdzenie czy kategoria już istnieje
-    const existingCategory = await Category.findOne({ name });
-    if (existingCategory) {
+    const exists = await Category.findOne({ name });
+    if (exists) {
+      return res.status(400).json({ error: 'Kategoria już istnieje' });
+    }
+
+    const cat = new Category({ name, keywords });
+    await cat.save();
+    res.json(cat);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// READ - POBIERZ WSZYSTKIE KATEGORIE
+router.get('/', auth, async (req, res) => {
+  try {
+    const categories = await Category.find();
+    res.json(categories);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// UPDATE - EDYTUJ KATEGORIĘ
+router.put('/:id', auth, async (req, res) => {
+  try {
+    const { name, keywords } = req.body;
+
+    if (!name || !keywords || keywords.length === 0) {
+      return res.status(400).json({ error: 'Nazwa i słowa kluczowe są wymagane' });
+    }
+
+    const existing = await Category.findOne({
+      name: name,
+      _id: { $ne: req.params.id }
+    });
+
+    if (existing) {
       return res.status(400).json({ error: 'Kategoria o tej nazwie już istnieje' });
     }
 
-    // Tworzenie nowej kategorii
-    const newCategory = new Category({
-      name,
-      keywords: keywords || [],
-      description: description || ''
-    });
-
-    await newCategory.save();
-
-    res.status(201).json({
-      message: 'Kategoria została utworzona',
-      category: newCategory
-    });
-  } catch (error) {
-    console.error('Błąd tworzenia kategorii:', error);
-    res.status(500).json({ error: 'Błąd serwera podczas tworzenia kategorii' });
-  }
-});
-
-/* ====================================================== POBRANIE WSZYSTKICH KATEGORII ====================================================== */
-router.get('/', async (req, res) => {
-  try {
-    const categories = await Category.find().sort({ createdAt: -1 });
-
-    res.json({
-      count: categories.length,
-      categories: categories
-    });
-  } catch (error) {
-    console.error('Błąd pobierania kategorii:', error);
-    res.status(500).json({ error: 'Błąd serwera podczas pobierania kategorii' });
-  }
-});
-
-/* ====================================================== AKTUALIZACJA KATEGORII ====================================================== */
-router.put('/:id', async (req, res) => {
-  try {
-    const { name, keywords, description } = req.body;
-
-    // Sprawdzenie czy nowa nazwa nie koliduje z inną kategorią
-    if (name) {
-      const existingCategory = await Category.findOne({
-        name: name,
-        _id: { $ne: req.params.id } // Wyklucz bieżącą kategorię
-      });
-
-      if (existingCategory) {
-        return res.status(400).json({ 
-          error: 'Kategoria o tej nazwie już istnieje' 
-        });
-      }
-    }
-
-    const updateData = {};
-    if (name) updateData.name = name;
-    if (keywords) updateData.keywords = keywords;
-    if (description !== undefined) updateData.description = description;
-
-    const updatedCategory = await Category.findByIdAndUpdate(
+    const updated = await Category.findByIdAndUpdate(
       req.params.id,
-      updateData,
+      { name, keywords },
       { new: true }
     );
 
-    if (!updatedCategory) {
+    if (!updated) {
       return res.status(404).json({ error: 'Kategoria nie znaleziona' });
     }
 
-    res.json({
-      message: 'Kategoria została zaktualizowana',
-      category: updatedCategory
-    });
-  } catch (error) {
-    console.error('Błąd aktualizacji kategorii:', error);
-    res.status(500).json({ error: 'Błąd serwera podczas aktualizacji kategorii' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* ====================================================== USUNIĘCIE KATEGORII ====================================================== */
-router.delete('/:id', async (req, res) => {
+// DELETE - USUŃ KATEGORIĘ
+router.delete('/:id', auth, async (req, res) => {
   try {
-    const category = await Category.findByIdAndDelete(req.params.id);
+    const deleted = await Category.findByIdAndDelete(req.params.id);
 
-    if (!category) {
+    if (!deleted) {
       return res.status(404).json({ error: 'Kategoria nie znaleziona' });
     }
 
-    res.json({
-      message: 'Kategoria została usunięta',
-      category: category
-    });
-  } catch (error) {
-    console.error('Błąd usuwania kategorii:', error);
-    res.status(500).json({ error: 'Błąd serwera podczas usuwania kategorii' });
+    res.json({ message: 'Kategoria usunięta' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

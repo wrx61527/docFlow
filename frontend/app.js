@@ -1,560 +1,506 @@
-/* ====================================================== KONFIGURACJA API ====================================================== */
+// ====== KONFIGURACJA ======
 const API_URL = 'http://localhost:3000/api';
 
-/* ====================================================== ELEMENTY DOM ====================================================== */
+// ====== ELEMENTY UI ======
 const authDiv = document.getElementById('auth');
 const appDiv = document.getElementById('app');
 const dashboard = document.getElementById('dashboard');
 const msg = document.getElementById('msg');
 const userSpan = document.getElementById('user');
 const userBar = document.getElementById('userBar');
+const adminCard = document.getElementById('adminCard');
+
+// Sekcje
 const categoriesSection = document.getElementById('categoriesSection');
 const documentsSection = document.getElementById('documentsSection');
-const usersSection = document.getElementById('usersSection');
-const categoriesDiv = document.getElementById('categories');
-const docsList = document.getElementById('docs');
+const adminSection = document.getElementById('adminSection');
+
+// Listy
+const catList = document.getElementById('catList');
+const docsList = document.getElementById('docsList');
 const usersList = document.getElementById('usersList');
+
+// Formularze
 const email = document.getElementById('email');
 const password = document.getElementById('password');
-const fileInput = document.getElementById('fileInput');
+const docFile = document.getElementById('docFile');
+const catName = document.getElementById('catName');
+const catKeywords = document.getElementById('catKeywords');
 
-/* ====================================================== ZMIENNE SESJI ====================================================== */
 let token = '';
 let role = '';
-let userId = '';
-let editingCategoryId = null;
 
-/* ====================================================== FUNKCJE POMOCNICZE ====================================================== */
-
-/**
- * Walidacja formatu adresu email
- */
+// ====== WALIDACJA ======
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-/**
- * Wyświetlanie komunikatu
- */
-function showMessage(text, type = 'danger') {
-  msg.className = `alert alert-${type}`;
-  msg.innerText = text;
-  msg.style.display = 'block';
-  setTimeout(() => {
-    msg.style.display = 'none';
-  }, 5000);
-}
-
-/**
- * Pobieranie tokena z nagłówka Authorization
- */
-function getAuthHeader() {
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
-  };
-}
-
-/* ====================================================== ZARZĄDZANIE SESJĄ ====================================================== */
-
-/**
- * Zapisanie sesji do localStorage
- */
+// ====== SESJA (localStorage) ======
 function saveSession(data) {
   localStorage.setItem('docflow_token', data.token);
   localStorage.setItem('docflow_email', data.email);
   localStorage.setItem('docflow_role', data.role);
-  localStorage.setItem('docflow_userId', data.userId);
 }
 
-/**
- * Wczytanie sesji z localStorage
- */
-function loadSession() {
-  token = localStorage.getItem('docflow_token');
-  const storedEmail = localStorage.getItem('docflow_email');
-  role = localStorage.getItem('docflow_role');
-  userId = localStorage.getItem('docflow_userId');
-
-  if (token && storedEmail && role) {
-    userSpan.innerText = storedEmail;
-    authDiv.style.display = 'none';
-    appDiv.style.display = 'block';
-    userBar.style.display = 'inline-block';
-
-    // Pokaż sekcję użytkowników tylko dla adminów
-    if (role === 'admin') {
-      document.getElementById('usersTile').style.display = 'block';
-    }
-
-    loadCategories();
-    loadDocuments();
-  }
-}
-
-/**
- * Wyczyszczenie sesji
- */
 function clearSession() {
   localStorage.removeItem('docflow_token');
   localStorage.removeItem('docflow_email');
   localStorage.removeItem('docflow_role');
-  localStorage.removeItem('docflow_userId');
-  token = '';
-  role = '';
-  userId = '';
-  editingCategoryId = null;
 }
 
-/* ====================================================== REJESTRACJA I LOGOWANIE ====================================================== */
+function loadSession() {
+  const t = localStorage.getItem('docflow_token');
+  const e = localStorage.getItem('docflow_email');
+  const r = localStorage.getItem('docflow_role');
+  
+  if (t && e && r) {
+    token = t;
+    role = r;
+    userSpan.innerText = e;
+    authDiv.style.display = 'none';
+    appDiv.style.display = 'block';
+    userBar.style.display = 'inline';
+    
+    if (role === 'admin') {
+      adminCard.style.display = 'block';
+    }
+    
+    loadDocuments();
+    loadCategories();
+  }
+}
 
-/**
- * Rejestracja nowego użytkownika
- */
+// Załaduj sesję przy starcie
+document.addEventListener('DOMContentLoaded', loadSession);
+
+// ====== AUTORYZACJA ======
 function register() {
   const emailVal = email.value.trim();
   const passVal = password.value.trim();
-
-  // Walidacja
+  
   if (!emailVal || !passVal) {
-    showMessage('Email i hasło są wymagane');
+    msg.className = 'text-danger';
+    msg.innerText = '❌ Email i hasło są wymagane';
     return;
   }
-
+  
   if (!isValidEmail(emailVal)) {
-    showMessage('Nieprawidłowy format adresu e-mail');
+    msg.className = 'text-danger';
+    msg.innerText = '❌ Nieprawidłowy adres e-mail';
     return;
   }
-
+  
   if (passVal.length < 6) {
-    showMessage('Hasło musi mieć co najmniej 6 znaków');
+    msg.className = 'text-danger';
+    msg.innerText = '❌ Hasło musi mieć minimum 6 znaków';
     return;
   }
-
-  // Wysłanie żądania
+  
   fetch(`${API_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: emailVal, password: passVal })
   })
-    .then(res => res.json())
-    .then(data => {
-      if (data.error) {
-        showMessage(data.error);
-      } else {
-        showMessage('Konto zostało utworzone! Możesz się zalogować.', 'success');
+    .then(res => {
+      if (res.ok) {
+        msg.className = 'text-success';
+        msg.innerText = '✅ Zarejestrowano! Możesz się zalogować.';
         email.value = '';
         password.value = '';
+      } else {
+        msg.className = 'text-danger';
+        msg.innerText = '❌ Użytkownik już istnieje';
       }
     })
-    .catch(err => showMessage('Błąd: ' + err.message));
+    .catch(() => {
+      msg.className = 'text-danger';
+      msg.innerText = '❌ Błąd rejestracji. Spróbuj później.';
+    });
 }
 
-/**
- * Logowanie użytkownika
- */
 function login() {
   const emailVal = email.value.trim();
   const passVal = password.value.trim();
-
+  
   if (!emailVal || !passVal) {
-    showMessage('Email i hasło są wymagane');
+    msg.className = 'text-danger';
+    msg.innerText = '❌ Email i hasło są wymagane';
     return;
   }
-
+  
   fetch(`${API_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: emailVal, password: passVal })
   })
     .then(res => {
-      if (!res.ok) throw new Error('Nieprawidłowe dane logowania');
+      if (!res.ok) throw new Error('Błędne dane logowania');
       return res.json();
     })
     .then(data => {
       token = data.token;
       role = data.role;
-      userId = data.userId;
       saveSession(data);
+      
       userSpan.innerText = data.email;
-      userBar.style.display = 'inline-block';
+      userBar.style.display = 'inline';
       authDiv.style.display = 'none';
       appDiv.style.display = 'block';
+      msg.innerText = '';
       email.value = '';
       password.value = '';
-
+      
       if (role === 'admin') {
-        document.getElementById('usersTile').style.display = 'block';
+        adminCard.style.display = 'block';
+      } else {
+        adminCard.style.display = 'none';
       }
-
-      loadCategories();
+      
       loadDocuments();
-      showMessage('Zalogowano pomyślnie!', 'success');
+      loadCategories();
+      showSection('dashboard');
     })
     .catch(err => {
-      showMessage(err.message);
+      msg.className = 'text-danger';
+      msg.innerText = '❌ ' + err.message;
     });
 }
 
-/**
- * Wylogowanie użytkownika
- */
 function logout() {
   clearSession();
+  token = '';
+  role = '';
+  
   userBar.style.display = 'none';
   appDiv.style.display = 'none';
   authDiv.style.display = 'block';
-  dashboard.style.display = 'grid';
-  categoriesSection.style.display = 'none';
+  
+  dashboard.style.display = 'block';
   documentsSection.style.display = 'none';
-  usersSection.style.display = 'none';
-  showMessage('Wylogowano pomyślnie', 'success');
+  categoriesSection.style.display = 'none';
+  adminSection.style.display = 'none';
 }
 
-/* ====================================================== NAWIGACJA ====================================================== */
-
-/**
- * Pokazanie danej sekcji
- */
+// ====== NAWIGACJA ======
 function showSection(sectionId) {
+  // Ukryj wszystkie sekcje
   dashboard.style.display = 'none';
   categoriesSection.style.display = 'none';
   documentsSection.style.display = 'none';
-  usersSection.style.display = 'none';
-  document.getElementById(sectionId).style.display = 'block';
-
-  if (sectionId === 'usersSection') {
+  adminSection.style.display = 'none';
+  
+  // Pokaż wybraną sekcję
+  if (sectionId === 'dashboard') {
+    dashboard.style.display = 'block';
+  } else if (sectionId === 'documentsSection') {
+    documentsSection.classList.add('active');
+    documentsSection.style.display = 'block';
+    loadDocuments();
+  } else if (sectionId === 'categoriesSection') {
+    categoriesSection.classList.add('active');
+    categoriesSection.style.display = 'block';
+    loadCategories();
+  } else if (sectionId === 'adminSection') {
+    adminSection.classList.add('active');
+    adminSection.style.display = 'block';
     loadUsers();
   }
 }
 
-/**
- * Powrót do dashboardu
- */
-function backToDashboard() {
-  dashboard.style.display = 'grid';
-  categoriesSection.style.display = 'none';
-  documentsSection.style.display = 'none';
-  usersSection.style.display = 'none';
-}
-
-/* ====================================================== ZARZĄDZANIE KATEGORIAMI ====================================================== */
-
-/**
- * Załadowanie kategorii
- */
-function loadCategories() {
-  categoriesDiv.innerHTML = '<p class="text-muted">Ładowanie kategorii...</p>';
-
-  fetch(`${API_URL}/categories`, {
-    headers: getAuthHeader()
-  })
-    .then(res => {
-      if (!res.ok) throw new Error('Błąd pobierania kategorii');
-      return res.json();
-    })
-    .then(data => {
-      categoriesDiv.innerHTML = '';
-      if (data.categories.length === 0) {
-        categoriesDiv.innerHTML = '<p class="text-muted">Brak kategorii. Dodaj pierwszą!</p>';
-        return;
-      }
-
-      data.categories.forEach(cat => {
-        const keywordsTags = cat.keywords
-          .map(k => `<span class="badge bg-info">${k}</span>`)
-          .join('');
-
-        const categoryItem = document.createElement('div');
-        categoryItem.className = 'document-item';
-        categoryItem.innerHTML = `
-          <div style="display: flex; justify-content: space-between; align-items: start;">
-            <div>
-              <h6>${cat.name}</h6>
-              <p style="margin: 5px 0 10px 0;">${keywordsTags}</p>
-            </div>
-            <div>
-              <button class="btn btn-sm btn-warning" onclick="editCategory('${cat._id}', '${cat.name}', '${cat.keywords.join(', ')}')">Edytuj</button>
-              <button class="btn btn-sm btn-danger" onclick="deleteCategory('${cat._id}')">Usuń</button>
-            </div>
-          </div>
-        `;
-        categoriesDiv.appendChild(categoryItem);
-      });
-    })
-    .catch(err => showMessage(err.message));
-}
-
-/**
- * Zapisanie nowej kategorii
- */
-function saveCategory() {
-  const catNameInput = document.getElementById('catName');
-  const keywordsInput = document.getElementById('keywords');
-  const name = catNameInput.value.trim();
-  const keywordsArr = keywordsInput.value
-    .split(',')
-    .map(k => k.trim())
-    .filter(k => k);
-
-  if (!name) {
-    showMessage('Nazwa kategorii jest wymagana');
-    return;
-  }
-
-  const url = editingCategoryId
-    ? `${API_URL}/categories/${editingCategoryId}`
-    : `${API_URL}/categories`;
-
-  const method = editingCategoryId ? 'PUT' : 'POST';
-
-  fetch(url, {
-    method: method,
-    headers: getAuthHeader(),
-    body: JSON.stringify({ name, keywords: keywordsArr })
-  })
-    .then(res => {
-      if (!res.ok) throw new Error('Błąd zapisu kategorii');
-      return res.json();
-    })
-    .then(data => {
-      showMessage('Kategoria została zapisana', 'success');
-      editingCategoryId = null;
-      catNameInput.value = '';
-      keywordsInput.value = '';
-      loadCategories();
-    })
-    .catch(err => showMessage(err.message));
-}
-
-/**
- * Edycja kategorii
- */
-function editCategory(id, name, keywords) {
-  editingCategoryId = id;
-  document.getElementById('catName').value = name;
-  document.getElementById('keywords').value = keywords;
-}
-
-/**
- * Usunięcie kategorii
- */
-function deleteCategory(id) {
-  if (confirm('Czy na pewno chcesz usunąć tę kategorię?')) {
-    fetch(`${API_URL}/categories/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeader()
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('Błąd usuwania kategorii');
-        return res.json();
-      })
-      .then(data => {
-        showMessage('Kategoria została usunięta', 'success');
-        loadCategories();
-      })
-      .catch(err => showMessage(err.message));
-  }
-}
-
-/* ====================================================== ZARZĄDZANIE DOKUMENTAMI ====================================================== */
-
-/**
- * Załadowanie listy dokumentów
- */
-function loadDocuments() {
-  docsList.innerHTML = '<p class="text-muted">Ładowanie dokumentów...</p>';
-
-  fetch(`${API_URL}/documents`, {
-    headers: getAuthHeader()
-  })
-    .then(res => {
-      if (!res.ok) throw new Error('Błąd pobierania dokumentów');
-      return res.json();
-    })
-    .then(data => {
-      docsList.innerHTML = '';
-      if (data.documents.length === 0) {
-        docsList.innerHTML = '<p class="text-muted">Brak dokumentów. Prześlij swój pierwszy dokument!</p>';
-        return;
-      }
-
-      data.documents.forEach(doc => {
-        const statusClass = doc.status === 'Szkic' ? 'draft' : doc.status === 'Do akceptacji' ? 'review' : 'approved';
-        const docItem = document.createElement('div');
-        docItem.className = 'document-item';
-        docItem.innerHTML = `
-          <div style="display: flex; justify-content: space-between; align-items: start;">
-            <div style="flex: 1;">
-              <h6>📄 ${doc.filename}</h6>
-              <p style="margin: 5px 0;">
-                <span class="badge-category">${doc.category}</span>
-                <span class="badge-status ${statusClass}">${doc.status}</span>
-              </p>
-              <small class="text-muted">${new Date(doc.createdAt).toLocaleDateString('pl-PL')}</small>
-            </div>
-            <div>
-              <button class="btn btn-sm btn-info" onclick="downloadDocument('${doc._id}', '${doc.filename}')">Pobierz</button>
-              <button class="btn btn-sm btn-danger" onclick="deleteDocument('${doc._id}')">Usuń</button>
-            </div>
-          </div>
-        `;
-        docsList.appendChild(docItem);
-      });
-    })
-    .catch(err => showMessage(err.message));
-}
-
-/**
- * Przesłanie dokumentu
- */
+// ====== DOKUMENTY ======
 function uploadDocument() {
-  if (!fileInput.files.length) {
-    showMessage('Wybierz plik do przesłania');
+  if (!docFile.files.length) {
+    alert('⚠️ Wybierz plik!');
     return;
   }
-
+  
+  const file = docFile.files[0];
   const formData = new FormData();
-  formData.append('file', fileInput.files[0]);
-
+  formData.append('file', file);
+  
   fetch(`${API_URL}/documents/upload`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`
-    },
+    headers: { 'Authorization': `Bearer ${token}` },
     body: formData
   })
-    .then(res => {
-      if (!res.ok) throw new Error('Błąd przesyłania pliku');
-      return res.json();
-    })
+    .then(res => res.json())
     .then(data => {
-      showMessage(`Dokument "${data.document.filename}" został przesłany i sklasyfikowany jako: ${data.document.category}`, 'success');
-      fileInput.value = '';
-      loadDocuments();
-    })
-    .catch(err => showMessage(err.message));
-}
-
-/**
- * Pobranie dokumentu
- */
-function downloadDocument(id, filename) {
-  const link = document.createElement('a');
-  link.href = `${API_URL}/documents/download/${id}`;
-  link.download = filename;
-  link.click();
-}
-
-/**
- * Usunięcie dokumentu
- */
-function deleteDocument(id) {
-  if (confirm('Czy na pewno chcesz usunąć ten dokument?')) {
-    fetch(`${API_URL}/documents/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeader()
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('Błąd usuwania dokumentu');
-        return res.json();
-      })
-      .then(data => {
-        showMessage('Dokument został usunięty', 'success');
+      if (data.error) {
+        alert('❌ ' + data.error);
+      } else {
+        alert('✅ Dokument przesłany!');
+        docFile.value = '';
         loadDocuments();
-      })
-      .catch(err => showMessage(err.message));
-  }
+      }
+    })
+    .catch(err => alert('❌ Błąd: ' + err.message));
 }
 
-/* ====================================================== ZARZĄDZANIE UŻYTKOWNIKAMI (ADMIN) ====================================================== */
-
-/**
- * Załadowanie listy użytkowników (tylko admin)
- */
-function loadUsers() {
-  usersList.innerHTML = '<p class="text-muted">Ładowanie użytkowników...</p>';
-
-  fetch(`${API_URL}/users`, {
-    headers: getAuthHeader()
+function loadDocuments() {
+  docsList.innerHTML = '<p class="text-muted">Ładowanie dokumentów...</p>';
+  
+  fetch(`${API_URL}/documents`, {
+    headers: { 'Authorization': `Bearer ${token}` }
   })
     .then(res => {
-      if (!res.ok) throw new Error('Błąd pobierania użytkowników');
+      if (!res.ok) throw new Error('Nieautoryzowany dostęp');
       return res.json();
     })
     .then(data => {
-      usersList.innerHTML = '';
-      if (data.users.length === 0) {
-        usersList.innerHTML = '<p class="text-muted">Brak użytkowników</p>';
+      if (!data.documents || data.documents.length === 0) {
+        docsList.innerHTML = '<p class="text-muted">📭 Brak dokumentów. Przesyłanie pierwszego dokumentu...</p>';
         return;
       }
-
-      data.users.forEach(user => {
-        const userItem = document.createElement('div');
-        userItem.className = 'document-item';
-        userItem.innerHTML = `
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <h6>👤 ${user.email}</h6>
-              <small class="text-muted">Rola: ${user.role}</small>
+      
+      docsList.innerHTML = '';
+      data.documents.forEach(doc => {
+        const statusBadge = getStatusBadge(doc.status || 'Niedostępny');
+        const html = `
+          <div class="document-item">
+            <div class="document-item-info">
+              <strong>${doc.filename || 'Nieznana nazwa'}</strong><br>
+              <small class="text-muted">
+                Kategoria: <span class="badge badge-primary">${doc.category || 'Nieprzypisane'}</span>
+                Status: ${statusBadge}
+              </small>
             </div>
-            <div>
-              <select class="form-select form-select-sm" style="width: auto; margin-right: 10px;" onchange="changeUserRole('${user._id}', this.value)">
-                <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
-                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+            <div class="document-item-actions">
+              <select class="form-select form-select-sm" style="max-width: 150px;" onchange="changeStatus('${doc._id}', this.value)">
+                <option value="Szkic" ${doc.status === 'Szkic' ? 'selected' : ''}>Szkic</option>
+                <option value="Do akceptacji" ${doc.status === 'Do akceptacji' ? 'selected' : ''}>Do akceptacji</option>
+                <option value="Zatwierdzony" ${doc.status === 'Zatwierdzony' ? 'selected' : ''}>Zatwierdzony</option>
+                <option value="Zarchiwizowany" ${doc.status === 'Zarchiwizowany' ? 'selected' : ''}>Zarchiwizowany</option>
               </select>
-              <button class="btn btn-sm btn-danger" onclick="deleteUser('${user._id}')">Usuń</button>
+              <button onclick="deleteDocument('${doc._id}')" class="btn btn-sm btn-danger">Usuń</button>
             </div>
           </div>
         `;
-        usersList.appendChild(userItem);
+        docsList.innerHTML += html;
       });
     })
-    .catch(err => showMessage(err.message));
+    .catch(err => {
+      docsList.innerHTML = `<p class="text-danger">❌ ${err.message}</p>`;
+    });
 }
 
-/**
- * Zmiana roli użytkownika
- */
-function changeUserRole(userId, newRole) {
-  fetch(`${API_URL}/users/${userId}/role`, {
+function changeStatus(docId, newStatus) {
+  fetch(`${API_URL}/documents/${docId}/status`, {
     method: 'PUT',
-    headers: getAuthHeader(),
-    body: JSON.stringify({ role: newRole })
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ status: newStatus })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        alert('❌ ' + data.error);
+      } else {
+        alert('✅ Status zmieniony!');
+        loadDocuments();
+      }
+    })
+    .catch(err => alert('❌ Błąd: ' + err.message));
+}
+
+function deleteDocument(docId) {
+  if (!confirm('❓ Na pewno chcesz usunąć ten dokument?')) return;
+  
+  fetch(`${API_URL}/documents/${docId}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        alert('❌ ' + data.error);
+      } else {
+        alert('✅ Dokument usunięty!');
+        loadDocuments();
+      }
+    })
+    .catch(err => alert('❌ Błąd: ' + err.message));
+}
+
+// ====== KATEGORIE ======
+function addCategory() {
+  const name = catName.value.trim();
+  const keywords = catKeywords.value.split(',').map(k => k.trim()).filter(k => k);
+  
+  if (!name || keywords.length === 0) {
+    alert('⚠️ Wypełnij nazwę i słowa kluczowe!');
+    return;
+  }
+  
+  fetch(`${API_URL}/categories`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name, keywords })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        alert('❌ ' + data.error);
+      } else {
+        alert('✅ Kategoria dodana!');
+        catName.value = '';
+        catKeywords.value = '';
+        loadCategories();
+      }
+    })
+    .catch(err => alert('❌ Błąd: ' + err.message));
+}
+
+function loadCategories() {
+  catList.innerHTML = '<p class="text-muted">Ładowanie kategorii...</p>';
+  
+  fetch(`${API_URL}/categories`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (!data || data.length === 0) {
+        catList.innerHTML = '<p class="text-muted">📭 Brak kategorii. Dodaj pierwszą...</p>';
+        return;
+      }
+      
+      catList.innerHTML = '';
+      data.forEach(cat => {
+        const keywordsTags = cat.keywords.map(k => `<span class="badge badge-success">${k}</span>`).join(' ');
+        const html = `
+          <div class="list-group-item">
+            <strong>${cat.name}</strong><br>
+            <small class="text-muted">Słowa kluczowe:</small><br>
+            ${keywordsTags}
+            <button onclick="deleteCategory('${cat._id}')" class="btn btn-sm btn-danger mt-2">Usuń</button>
+          </div>
+        `;
+        catList.innerHTML += html;
+      });
+    })
+    .catch(err => {
+      catList.innerHTML = `<p class="text-danger">❌ ${err.message}</p>`;
+    });
+}
+
+function deleteCategory(catId) {
+  if (!confirm('❓ Na pewno chcesz usunąć tę kategorię?')) return;
+  
+  fetch(`${API_URL}/categories/${catId}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        alert('❌ ' + data.error);
+      } else {
+        alert('✅ Kategoria usunięta!');
+        loadCategories();
+      }
+    })
+    .catch(err => alert('❌ Błąd: ' + err.message));
+}
+
+// ====== UŻYTKOWNICY (ADMIN) ======
+function loadUsers() {
+  if (role !== 'admin') {
+    usersList.innerHTML = '<p class="text-danger">❌ Brak dostępu - tylko admin!</p>';
+    return;
+  }
+  
+  usersList.innerHTML = '<p class="text-muted">Ładowanie użytkowników...</p>';
+  
+  fetch(`${API_URL}/users`, {
+    headers: { 'Authorization': `Bearer ${token}` }
   })
     .then(res => {
-      if (!res.ok) throw new Error('Błąd zmiany roli');
+      if (!res.ok) throw new Error('Nieautoryzowany dostęp');
       return res.json();
     })
     .then(data => {
-      showMessage('Rola użytkownika została zmieniona', 'success');
-      loadUsers();
+      if (!data || data.length === 0) {
+        usersList.innerHTML = '<p class="text-muted">📭 Brak użytkowników.</p>';
+        return;
+      }
+      
+      usersList.innerHTML = '';
+      data.forEach(user => {
+        const roleBadge = user.role === 'admin' ? 
+          '<span class="badge badge-danger">Admin</span>' : 
+          '<span class="badge badge-primary">User</span>';
+        
+        const html = `
+          <div class="list-group-item">
+            <strong>${user.email}</strong> ${roleBadge}<br>
+            <small class="text-muted">ID: ${user._id}</small><br>
+            <button onclick="changeUserRole('${user._id}', '${user.role === 'admin' ? 'user' : 'admin'}')" class="btn btn-sm btn-warning mt-2">
+              ${user.role === 'admin' ? 'Obniż do User' : 'Podnieś do Admin'}
+            </button>
+            <button onclick="deleteUser('${user._id}')" class="btn btn-sm btn-danger mt-2">Usuń</button>
+          </div>
+        `;
+        usersList.innerHTML += html;
+      });
     })
-    .catch(err => showMessage(err.message));
+    .catch(err => {
+      usersList.innerHTML = `<p class="text-danger">❌ ${err.message}</p>`;
+    });
 }
 
-/**
- * Usunięcie użytkownika
- */
-function deleteUser(userId) {
-  if (confirm('Czy na pewno chcesz usunąć tego użytkownika?')) {
-    fetch(`${API_URL}/users/${userId}`, {
-      method: 'DELETE',
-      headers: getAuthHeader()
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('Błąd usuwania użytkownika');
-        return res.json();
-      })
-      .then(data => {
-        showMessage('Użytkownik został usunięty', 'success');
+function changeUserRole(userId, newRole) {
+  if (!confirm(`❓ Zmienić rolę na '${newRole}'?`)) return;
+  
+  fetch(`${API_URL}/users/${userId}/role`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ role: newRole })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        alert('❌ ' + data.error);
+      } else {
+        alert('✅ Rola zmieniona!');
         loadUsers();
-      })
-      .catch(err => showMessage(err.message));
-  }
+      }
+    })
+    .catch(err => alert('❌ Błąd: ' + err.message));
 }
 
-/* ====================================================== INICJALIZACJA ====================================================== */
-document.addEventListener('DOMContentLoaded', () => {
-  loadSession();
-});
+function deleteUser(userId) {
+  if (!confirm('❓ Na pewno usunąć tego użytkownika?')) return;
+  
+  fetch(`${API_URL}/users/${userId}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        alert('❌ ' + data.error);
+      } else {
+        alert('✅ Użytkownik usunięty!');
+        loadUsers();
+      }
+    })
+    .catch(err => alert('❌ Błąd: ' + err.message));
+}
+
+// ====== HELPER FUNCTIONS ======
+function getStatusBadge(status) {
+  const badges = {
+    'Szkic': '<span class="badge badge-warning">Szkic</span>',
+    'Do akceptacji': '<span class="badge badge-info">Do akceptacji</span>',
+    'Zatwierdzony': '<span class="badge badge-success">Zatwierdzony</span>',
+    'Zarchiwizowany': '<span class="badge badge-secondary">Zarchiwizowany</span>'
+  };
+  return badges[status] || '<span class="badge badge-danger">Nieznany</span>';
+}

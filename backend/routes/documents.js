@@ -1,225 +1,123 @@
+/* ===== DOKUMENTY - POPRAWIONE ===== */
+
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
-const path = require('path');
 const Document = require('../models/Document');
 const classify = require('../utils/classifier');
+
+const upload = multer({ dest: 'uploads/' });
 const router = express.Router();
 
-/* ====================================================== KONFIGURACJA MULTER ====================================================== */
-const uploadsDir = path.join(__dirname, '../uploads');
+// Middleware autoryzacji
+const auth = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).send('Brak tokena');
+  next();
+};
 
-// Tworzenie katalogu uploads jeśli nie istnieje
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    // Zachowanie oryginalnej nazwy pliku
-    const timestamp = Date.now();
-    cb(null, `${timestamp}-${file.originalname}`);
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // Limit 50MB
-  fileFilter: (req, file, cb) => {
-    // Dozwolone typy MIME
-    const allowedMimes = [
-      'text/plain',
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    ];
-
-    if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Nieobsługiwany typ pliku'));
-    }
-  }
-});
-
-/* ====================================================== PRZESŁANIE I KLASYFIKACJA DOKUMENTU ====================================================== */
-router.post('/upload', upload.single('file'), async (req, res) => {
+// UPLOAD DOKUMENTU
+router.post('/upload', auth, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'Brak przesłanego pliku' });
+      return res.status(400).json({ error: 'Nie przesłano pliku' });
     }
 
-    // Automatyczna klasyfikacja dokumentu
-    const category = await classify(req.file.path, req.file.originalname);
+    const safeFilename = Buffer.from(
+      req.file.originalname,
+      'latin1'
+    ).toString('utf8');
 
-    // Tworzenie rekordu dokumentu w bazie danych
-    const newDocument = new Document({
-      filename: req.file.originalname,
+    const category = await classify(req.file.path, safeFilename);
+
+    const doc = new Document({
+      filename: safeFilename,
       path: req.file.path,
-      userId: req.userId, // Z middleware weryfikacji JWT
-      category: category,
-      fileSize: req.file.size,
-      mimeType: req.file.mimetype,
-      status: 'Szkic'
+      category,
+      status: 'Szkic',
+      uploadedBy: req.user?.id || 'unknown'
     });
 
-    await newDocument.save();
-
-    res.status(201).json({
-      message: 'Dokument został przesłany i sklasyfikowany',
-      document: {
-        id: newDocument._id,
-        filename: newDocument.filename,
-        category: newDocument.category,
-        status: newDocument.status,
-        createdAt: newDocument.createdAt
-      }
-    });
-  } catch (error) {
-    console.error('Błąd przesyłania dokumentu:', error);
-    res.status(500).json({ error: 'Błąd serwera podczas przesyłania dokumentu' });
+    await doc.save();
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* ====================================================== POBRANIE LISTY DOKUMENTÓW UŻYTKOWNIKA ====================================================== */
-router.get('/', async (req, res) => {
+// POBRANIE WSZYSTKICH DOKUMENTÓW
+router.get('/', auth, async (req, res) => {
   try {
-    // Pobranie dokumentów tylko zalogowanego użytkownika
-    const documents = await Document.find({ userId: req.userId })
-      .sort({ createdAt: -1 })
-      .select('-path'); // Nie wysyłamy ścieżki do klienta
-
-    res.json({
-      count: documents.length,
-      documents: documents
-    });
-  } catch (error) {
-    console.error('Błąd pobierania dokumentów:', error);
-    res.status(500).json({ error: 'Błąd serwera podczas pobierania dokumentów' });
+    const documents = await Document.find();
+    res.json({ documents });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* ====================================================== POBRANIE DOKUMENTU DO ŚCIĄGNIĘCIA ====================================================== */
-router.get('/download/:id', async (req, res) => {
+// POBIERZ DOKUMENT DO POBRANIA
+router.get('/download/:id', auth, async (req, res) => {
   try {
-    const document = await Document.findById(req.params.id);
-
-    if (!document) {
-      return res.status(404).json({ error: 'Dokument nie znaleziony' });
-    }
-
-    // Weryfikacja że użytkownik jest właścicielem dokumentu
-    if (document.userId.toString() !== req.userId) {
-      return res.status(403).json({ error: 'Brak dostępu do tego dokumentu' });
-    }
-
-    // Sprawdzenie czy plik istnieje
-    if (!fs.existsSync(document.path)) {
-      return res.status(404).json({ error: 'Plik nie istnieje na serwerze' });
-    }
-
-    // Wysłanie pliku do pobrania
-    res.download(document.path, document.filename);
-  } catch (error) {
-    console.error('Błąd pobierania dokumentu:', error);
-    res.status(500).json({ error: 'Błąd serwera podczas pobierania dokumentu' });
+    const doc = await Document.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Dokument nie znaleziony' });
+    res.download(doc.path, doc.filename);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* ====================================================== USUNIĘCIE DOKUMENTU ====================================================== */
-router.delete('/:id', async (req, res) => {
-  try {
-    const document = await Document.findById(req.params.id);
-
-    if (!document) {
-      return res.status(404).json({ error: 'Dokument nie znaleziony' });
-    }
-
-    // Weryfikacja że użytkownik jest właścicielem dokumentu
-    if (document.userId.toString() !== req.userId) {
-      return res.status(403).json({ error: 'Brak dostępu do tego dokumentu' });
-    }
-
-    // Usunięcie pliku z dysku
-    if (fs.existsSync(document.path)) {
-      fs.unlinkSync(document.path);
-    }
-
-    // Usunięcie rekordu z bazy danych
-    await Document.findByIdAndDelete(req.params.id);
-
-    res.json({ message: 'Dokument został usunięty' });
-  } catch (error) {
-    console.error('Błąd usuwania dokumentu:', error);
-    res.status(500).json({ error: 'Błąd serwera podczas usuwania dokumentu' });
-  }
-});
-
-/* ====================================================== ZMIANA STATUSU DOKUMENTU ====================================================== */
-router.put('/:id/status', async (req, res) => {
+// ZMIANA STATUSU DOKUMENTU
+router.put('/:id/status', auth, async (req, res) => {
   try {
     const { status } = req.body;
-    const validStatuses = ['Szkic', 'Do akceptacji', 'Zatwierdzony', 'Zarchiwizowany'];
-
-    if (!status || !validStatuses.includes(status)) {
-      return res.status(400).json({ 
-        error: 'Nieprawidłowy status. Dozwolone: ' + validStatuses.join(', ') 
-      });
+    if (!status) {
+      return res.status(400).json({ error: 'Status jest wymagany' });
     }
 
-    const document = await Document.findById(req.params.id);
+    const doc = await Document.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
 
-    if (!document) {
-      return res.status(404).json({ error: 'Dokument nie znaleziony' });
-    }
-
-    // Weryfikacja że użytkownik jest właścicielem dokumentu
-    if (document.userId.toString() !== req.userId) {
-      return res.status(403).json({ error: 'Brak dostępu do tego dokumentu' });
-    }
-
-    document.status = status;
-    document.updatedAt = new Date();
-    await document.save();
-
-    res.json({
-      message: 'Status dokumentu został zaktualizowany',
-      document: document
-    });
-  } catch (error) {
-    console.error('Błąd zmiany statusu dokumentu:', error);
-    res.status(500).json({ error: 'Błąd serwera podczas zmiany statusu dokumentu' });
+    if (!doc) return res.status(404).json({ error: 'Dokument nie znaleziony' });
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* ====================================================== REKLASYFIKACJA WSZYSTKICH DOKUMENTÓW ====================================================== */
-router.post('/admin/reclassify-all', async (req, res) => {
+// USUWANIE DOKUMENTU
+router.delete('/:id', auth, async (req, res) => {
   try {
-    const allDocuments = await Document.find();
-    let updatedCount = 0;
+    const doc = await Document.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Dokument nie znaleziony' });
 
-    for (const doc of allDocuments) {
-      const newCategory = await classify(doc.path, doc.filename);
-      if (doc.category !== newCategory) {
-        doc.category = newCategory;
-        await doc.save();
-        updatedCount++;
-      }
+    if (fs.existsSync(doc.path)) {
+      fs.unlinkSync(doc.path);
     }
 
-    res.json({
-      message: 'Reklasyfikacja zakończona',
-      totalDocuments: allDocuments.length,
-      updatedDocuments: updatedCount
-    });
-  } catch (error) {
-    console.error('Błąd reklasyfikacji:', error);
-    res.status(500).json({ error: 'Błąd serwera podczas reklasyfikacji' });
+    await Document.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Dokument usunięty' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// REKLASYFIKACJA WSZYSTKICH DOKUMENTÓW
+router.post('/reclassify', auth, async (req, res) => {
+  try {
+    const docs = await Document.find();
+    for (const doc of docs) {
+      if (fs.existsSync(doc.path)) {
+        const newCategory = await classify(doc.path, doc.filename);
+        doc.category = newCategory;
+        await doc.save();
+      }
+    }
+    res.json({ message: 'Reklasyfikacja zakończona' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
